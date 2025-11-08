@@ -36,14 +36,11 @@ export class AIWebBrowserEditor extends EditorPane {
 	protected override createEditor(parent: HTMLElement): void {
 		this.container = dom.append(parent, dom.$('.ai-web-browser-container'));
 
-		// Main layout: Browser (left 80%) + Chat (right 20%)
 		const mainLayout = dom.append(this.container, dom.$('.main-layout'));
 
-		// Browser Panel (80%)
 		const browserPanel = dom.append(mainLayout, dom.$('.browser-panel'));
 		this.createBrowserPanel(browserPanel);
 
-		// Chat Panel (20%)
 		const chatPanel = dom.append(mainLayout, dom.$('.chat-panel'));
 		this.createChatPanel(chatPanel);
 
@@ -51,7 +48,6 @@ export class AIWebBrowserEditor extends EditorPane {
 	}
 
 	private createBrowserPanel(parent: HTMLElement): void {
-		// URL input section
 		const urlSection = dom.append(parent, dom.$('.url-section'));
 
 		this.urlInput = dom.append(urlSection, dom.$('input.url-input')) as HTMLInputElement;
@@ -69,7 +65,6 @@ export class AIWebBrowserEditor extends EditorPane {
 			}
 		};
 
-		// Webview container
 		const webviewContainer = dom.append(parent, dom.$('.webview-container'));
 		this.webviewElement = dom.append(webviewContainer, dom.$('iframe.webview')) as HTMLIFrameElement;
 		this.webviewElement.sandbox.add('allow-same-origin', 'allow-scripts', 'allow-forms', 'allow-popups');
@@ -81,7 +76,6 @@ export class AIWebBrowserEditor extends EditorPane {
 		let url = this.urlInput.value.trim();
 		if (!url) { return; }
 
-		// Add https:// if no protocol specified
 		if (!url.startsWith('http://') && !url.startsWith('https://')) {
 			url = 'https://' + url;
 		}
@@ -93,16 +87,14 @@ export class AIWebBrowserEditor extends EditorPane {
 	}
 
 	private createChatPanel(parent: HTMLElement): void {
-		// API Key section
 		const apiKeySection = dom.append(parent, dom.$('.api-key-section'));
 		const apiKeyLabel = dom.append(apiKeySection, dom.$('label.api-key-label'));
-		apiKeyLabel.textContent = 'API Key:';
+		apiKeyLabel.textContent = 'Anthropic API Key:';
 
 		this.apiKeyInput = dom.append(apiKeySection, dom.$('input.api-key-input')) as HTMLInputElement;
 		this.apiKeyInput.type = 'password';
-		this.apiKeyInput.placeholder = 'Enter OpenAI or Anthropic API key';
+		this.apiKeyInput.placeholder = 'Enter Anthropic API key';
 
-		// Load saved API key
 		const savedKey = this.storageService.get('aiWebBrowser.apiKey', 0, '');
 		if (savedKey) {
 			this.apiKeyInput.value = savedKey;
@@ -112,39 +104,118 @@ export class AIWebBrowserEditor extends EditorPane {
 			this.storageService.store('aiWebBrowser.apiKey', this.apiKeyInput!.value, 0, 0);
 		};
 
-		// Provider selection
-		const providerSection = dom.append(parent, dom.$('.provider-section'));
-		const providerLabel = dom.append(providerSection, dom.$('label.provider-label'));
-		providerLabel.textContent = 'Provider:';
-
-		const providerSelect = dom.append(providerSection, dom.$('select.provider-select')) as HTMLSelectElement;
-		const openaiOption = dom.append(providerSelect, dom.$('option')) as HTMLOptionElement;
-		openaiOption.value = 'openai';
-		openaiOption.textContent = 'OpenAI';
-		const anthropicOption = dom.append(providerSelect, dom.$('option')) as HTMLOptionElement;
-		anthropicOption.value = 'anthropic';
-		anthropicOption.textContent = 'Anthropic';
-
-		// Chat messages area
 		this.chatMessages = dom.append(parent, dom.$('.chat-messages'));
 
-		// Chat input section
 		const chatInputSection = dom.append(parent, dom.$('.chat-input-section'));
-
 		this.chatInput = dom.append(chatInputSection, dom.$('textarea.chat-input')) as HTMLTextAreaElement;
 		this.chatInput.placeholder = 'Ask about the website...';
 		this.chatInput.rows = 3;
 
 		const sendButton = dom.append(chatInputSection, dom.$('button.send-button'));
 		sendButton.textContent = 'Send';
-		sendButton.onclick = () => this.sendMessage(providerSelect.value);
+		sendButton.onclick = () => this.sendMessage();
 
 		this.chatInput.onkeydown = (e) => {
 			if (e.key === 'Enter' && !e.shiftKey) {
 				e.preventDefault();
-				this.sendMessage(providerSelect.value);
+				this.sendMessage();
 			}
 		};
+	}
+
+	private async sendMessage(): Promise<void> {
+		if (!this.chatInput || !this.apiKeyInput) { return; }
+
+		const message = this.chatInput.value.trim();
+		if (!message) { return; }
+
+		const apiKey = this.apiKeyInput.value.trim();
+		if (!apiKey) {
+			this.notificationService.error('Please enter an API key first');
+			return;
+		}
+
+		if (!this.currentUrl) {
+			this.notificationService.error('Please load a website first');
+			return;
+		}
+
+		this.addMessage('user', message);
+		this.chatInput.value = '';
+
+		const pageContent = await this.getPageContent();
+		try {
+			const response = await this.callAnthropic(apiKey, message, pageContent);
+			this.addMessage('assistant', response);
+		} catch (error: unknown) {
+			if (error instanceof Error) {
+				this.addMessage('error', `Error: ${error.message}`);
+			}
+		}
+	}
+
+	private async getPageContent(): Promise<string> {
+		try {
+			if (this.webviewElement && this.webviewElement.contentDocument) {
+				const doc = this.webviewElement.contentDocument;
+				const text = doc.body?.innerText || '';
+				return text.substring(0, 10000);
+			}
+		} catch (e) {
+			// CORS restriction - can't access iframe content
+		}
+
+		return `Current URL: ${this.currentUrl}\n(Note: Cannot extract content due to CORS restrictions. The LLM will work with the URL context.)`;
+	}
+
+	private async callAnthropic(apiKey: string, userMessage: string, pageContent: string): Promise<string> {
+		const response = await fetch('https://api.anthropic.com/v1/messages', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'x-api-key': apiKey,
+				'anthropic-version': '2023-06-01'
+			},
+			body: JSON.stringify({
+				model: 'claude-3-5-sonnet-20241022',
+				max_tokens: 1024,
+				messages: [{
+					role: 'user',
+					content: `Website content:\n${pageContent}\n\nUser question: ${userMessage}`
+				}]
+			})
+		});
+
+		if (!response.ok) {
+			const error = await response.json();
+			throw new Error(error.error?.message || 'API request failed');
+		}
+
+		const data = await response.json();
+		return data.content[0].text;
+	}
+
+	private addMessage(role: string, content: string): void {
+		if (!this.chatMessages) { return; }
+
+		const messageDiv = dom.append(this.chatMessages, dom.$('.message'));
+		messageDiv.classList.add(role);
+
+		const roleSpan = dom.append(messageDiv, dom.$('.message-role'));
+		roleSpan.textContent = role.toUpperCase();
+
+		const contentDiv = dom.append(messageDiv, dom.$('.message-content'));
+		contentDiv.textContent = content;
+
+		this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+	}
+
+	override layout(dimension: Dimension, position?: IDomPosition): void {
+		if (!this.container) {
+			return;
+		}
+		this.container.style.width = `${dimension.width}px`;
+		this.container.style.height = `${dimension.height}px`;
 	}
 
 	private applyStyles(): void {
@@ -311,150 +382,5 @@ export class AIWebBrowserEditor extends EditorPane {
 			}
 		`;
 		this.container.appendChild(style);
-	}
-
-	private async sendMessage(provider: string): Promise<void> {
-		if (!this.chatInput || !this.apiKeyInput) { return; }
-
-		const message = this.chatInput.value.trim();
-		if (!message) { return; }
-
-		const apiKey = this.apiKeyInput.value.trim();
-		if (!apiKey) {
-			this.notificationService.error('Please enter an API key first');
-			return;
-		}
-
-		if (!this.currentUrl) {
-			this.notificationService.error('Please load a website first');
-			return;
-		}
-
-		// Add user message
-		this.addMessage('user', message);
-		this.chatInput.value = '';
-
-		// Get page content
-		const pageContent = await this.getPageContent();
-
-		// Call LLM API
-		try {
-			const response = await this.callLLMAPI(provider, apiKey, message, pageContent);
-			this.addMessage('assistant', response);
-		} catch (error: unknown) {
-			if (error instanceof Error) {
-				this.addMessage('error', `Error: ${error.message}`);
-			}
-		}
-	}
-
-	private async getPageContent(): Promise<string> {
-		// Try to get content from iframe
-		try {
-			if (this.webviewElement && this.webviewElement.contentDocument) {
-				const doc = this.webviewElement.contentDocument;
-				const text = doc.body?.innerText || '';
-				return text.substring(0, 10000);
-			}
-		} catch (e) {
-			// CORS restriction - can't access iframe content
-			// Return URL info instead
-		}
-
-		return `Current URL: ${this.currentUrl}\n(Note: Cannot extract content due to CORS restrictions. The LLM will work with the URL context.)`;
-	}
-
-	private async callLLMAPI(provider: string, apiKey: string, userMessage: string, pageContent: string): Promise<string> {
-		if (provider === 'openai') {
-			return this.callOpenAI(apiKey, userMessage, pageContent);
-		} else if (provider === 'anthropic') {
-			return this.callAnthropic(apiKey, userMessage, pageContent);
-		}
-		throw new Error('Unknown provider');
-	}
-
-	private async callOpenAI(apiKey: string, userMessage: string, pageContent: string): Promise<string> {
-		const messages = [
-			{
-				role: 'system',
-				content: 'You are a helpful assistant that answers questions about web pages. The user is viewing a website and will ask questions about it.'
-			},
-			{
-				role: 'user',
-				content: `Website content:\n${pageContent}\n\nUser question: ${userMessage}`
-			}
-		];
-
-		const response = await fetch('https://api.openai.com/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': `Bearer ${apiKey}`
-			},
-			body: JSON.stringify({
-				model: 'gpt-3.5-turbo',
-				messages: messages,
-				max_tokens: 1000
-			})
-		});
-
-		if (!response.ok) {
-			const error = await response.json();
-			throw new Error(error.error?.message || 'API request failed');
-		}
-
-		const data = await response.json();
-		return data.choices[0].message.content;
-	}
-
-	private async callAnthropic(apiKey: string, userMessage: string, pageContent: string): Promise<string> {
-		const response = await fetch('https://api.anthropic.com/v1/messages', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'x-api-key': apiKey,
-				'anthropic-version': '2023-06-01'
-			},
-			body: JSON.stringify({
-				model: 'claude-3-sonnet-20240229',
-				max_tokens: 1000,
-				messages: [{
-					role: 'user',
-					content: `Website content:\n${pageContent}\n\nUser question: ${userMessage}`
-				}]
-			})
-		});
-
-		if (!response.ok) {
-			const error = await response.json();
-			throw new Error(error.error?.message || 'API request failed');
-		}
-
-		const data = await response.json();
-		return data.content[0].text;
-	}
-
-	private addMessage(role: string, content: string): void {
-		if (!this.chatMessages) { return; }
-
-		const messageDiv = dom.append(this.chatMessages, dom.$('.message'));
-		messageDiv.classList.add(role);
-
-		const roleSpan = dom.append(messageDiv, dom.$('.message-role'));
-		roleSpan.textContent = role.toUpperCase();
-
-		const contentDiv = dom.append(messageDiv, dom.$('.message-content'));
-		contentDiv.textContent = content;
-
-		// Scroll to bottom
-		this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-	}
-
-	override layout(dimension: Dimension, position?: IDomPosition): void {
-		if (!this.container) {
-			return;
-		}
-		this.container.style.width = `${dimension.width}px`;
-		this.container.style.height = `${dimension.height}px`;
 	}
 }
