@@ -185,6 +185,9 @@ import './contrib/mcp/electron-browser/mcp.contribution.js';
 // Policy Export
 import './contrib/policyExport/electron-browser/policyExport.contribution.js';
 
+// AI Web Browser
+import './contrib/aiWebBrowser/browser/aiWebBrowser.contribution.js';
+
 //#endregion
 
 

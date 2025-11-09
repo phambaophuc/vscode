@@ -23,6 +23,8 @@ export class AIWebBrowserEditor extends EditorPane {
 	private apiKeyInput: HTMLInputElement | undefined;
 	private currentUrl: string = '';
 
+	private readonly GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=';
+
 	constructor(
 		group: IEditorGroup,
 		@ITelemetryService telemetryService: ITelemetryService,
@@ -52,8 +54,8 @@ export class AIWebBrowserEditor extends EditorPane {
 
 		this.urlInput = dom.append(urlSection, dom.$('input.url-input')) as HTMLInputElement;
 		this.urlInput.type = 'text';
-		this.urlInput.placeholder = 'Enter URL (e.g., https://vnexpress.net)';
-		this.urlInput.value = 'https://vnexpress.net';
+		this.urlInput.placeholder = 'Enter URL (e.g., https://www.wikipedia.org)';
+		this.urlInput.value = 'https://www.wikipedia.org';
 
 		const loadButton = dom.append(urlSection, dom.$('button.load-button'));
 		loadButton.textContent = 'Load';
@@ -68,6 +70,12 @@ export class AIWebBrowserEditor extends EditorPane {
 		const webviewContainer = dom.append(parent, dom.$('.webview-container'));
 		this.webviewElement = dom.append(webviewContainer, dom.$('iframe.webview')) as HTMLIFrameElement;
 		this.webviewElement.sandbox.add('allow-same-origin', 'allow-scripts', 'allow-forms', 'allow-popups');
+
+		this.webviewElement.onload = () => {
+			this.addMessage('system', '✓ Page loaded successfully');
+		};
+
+		this.loadUrl();
 	}
 
 	private loadUrl(): void {
@@ -81,19 +89,19 @@ export class AIWebBrowserEditor extends EditorPane {
 		}
 
 		this.currentUrl = url;
-		this.webviewElement.src = url;
-
 		this.addMessage('system', `Loading ${url}...`);
+
+		this.webviewElement.src = url;
 	}
 
 	private createChatPanel(parent: HTMLElement): void {
 		const apiKeySection = dom.append(parent, dom.$('.api-key-section'));
 		const apiKeyLabel = dom.append(apiKeySection, dom.$('label.api-key-label'));
-		apiKeyLabel.textContent = 'Anthropic API Key:';
+		apiKeyLabel.textContent = 'Gemini API Key:';
 
 		this.apiKeyInput = dom.append(apiKeySection, dom.$('input.api-key-input')) as HTMLInputElement;
 		this.apiKeyInput.type = 'password';
-		this.apiKeyInput.placeholder = 'Enter Anthropic API key';
+		this.apiKeyInput.placeholder = 'Enter Gemini API key';
 
 		const savedKey = this.storageService.get('aiWebBrowser.apiKey', 0, '');
 		if (savedKey) {
@@ -123,6 +131,35 @@ export class AIWebBrowserEditor extends EditorPane {
 		};
 	}
 
+	private async getPageContent(): Promise<string> {
+		try {
+			if (this.webviewElement && this.webviewElement.contentDocument) {
+				const doc = this.webviewElement.contentDocument || this.webviewElement.contentWindow;
+				const text = doc.body.innerText || doc.body.innerHTML;
+				return text.substring(0, 10000);
+			}
+		} catch (e) {
+			this.notificationService.error('CORS restriction - can\'t access iframe content');
+		}
+
+		return `Current URL: ${this.currentUrl}\n(Note: Cannot extract content due to CORS restrictions. The LLM will work with the URL context.)`;
+	}
+
+	private addMessage(role: string, content: string): void {
+		if (!this.chatMessages) { return; }
+
+		const messageDiv = dom.append(this.chatMessages, dom.$('.message'));
+		messageDiv.classList.add(role);
+
+		const roleSpan = dom.append(messageDiv, dom.$('.message-role'));
+		roleSpan.textContent = role.toUpperCase();
+
+		const contentDiv = dom.append(messageDiv, dom.$('.message-content'));
+		contentDiv.textContent = content;
+
+		this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+	}
+
 	private async sendMessage(): Promise<void> {
 		if (!this.chatInput || !this.apiKeyInput) { return; }
 
@@ -145,7 +182,7 @@ export class AIWebBrowserEditor extends EditorPane {
 
 		const pageContent = await this.getPageContent();
 		try {
-			const response = await this.callAnthropic(apiKey, message, pageContent);
+			const response = await this.callLLM(apiKey, message, pageContent);
 			this.addMessage('assistant', response);
 		} catch (error: unknown) {
 			if (error instanceof Error) {
@@ -154,37 +191,24 @@ export class AIWebBrowserEditor extends EditorPane {
 		}
 	}
 
-	private async getPageContent(): Promise<string> {
-		try {
-			if (this.webviewElement && this.webviewElement.contentDocument) {
-				const doc = this.webviewElement.contentDocument;
-				const text = doc.body?.innerText || '';
-				return text.substring(0, 10000);
+	private async callLLM(apiKey: string, userMessage: string, pageContent: string): Promise<string> {
+		const response = await fetch(
+			`${this.GEMINI_API + apiKey}`,
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					contents: [
+						{
+							role: 'user',
+							parts: [{ text: `Website content:\n${pageContent}\n\nUser question: ${userMessage}` }],
+						},
+					],
+				}),
 			}
-		} catch (e) {
-			// CORS restriction - can't access iframe content
-		}
-
-		return `Current URL: ${this.currentUrl}\n(Note: Cannot extract content due to CORS restrictions. The LLM will work with the URL context.)`;
-	}
-
-	private async callAnthropic(apiKey: string, userMessage: string, pageContent: string): Promise<string> {
-		const response = await fetch('https://api.anthropic.com/v1/messages', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'x-api-key': apiKey,
-				'anthropic-version': '2023-06-01'
-			},
-			body: JSON.stringify({
-				model: 'claude-3-5-sonnet-20241022',
-				max_tokens: 1024,
-				messages: [{
-					role: 'user',
-					content: `Website content:\n${pageContent}\n\nUser question: ${userMessage}`
-				}]
-			})
-		});
+		);
 
 		if (!response.ok) {
 			const error = await response.json();
@@ -192,22 +216,7 @@ export class AIWebBrowserEditor extends EditorPane {
 		}
 
 		const data = await response.json();
-		return data.content[0].text;
-	}
-
-	private addMessage(role: string, content: string): void {
-		if (!this.chatMessages) { return; }
-
-		const messageDiv = dom.append(this.chatMessages, dom.$('.message'));
-		messageDiv.classList.add(role);
-
-		const roleSpan = dom.append(messageDiv, dom.$('.message-role'));
-		roleSpan.textContent = role.toUpperCase();
-
-		const contentDiv = dom.append(messageDiv, dom.$('.message-content'));
-		contentDiv.textContent = content;
-
-		this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+		return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 	}
 
 	override layout(dimension: Dimension, position?: IDomPosition): void {
@@ -307,7 +316,7 @@ export class AIWebBrowserEditor extends EditorPane {
 
 			.api-key-input, .provider-select {
 				width: 100%;
-				padding: 6px 8px;
+				padding: 6px 0px;
 				background: var(--vscode-input-background);
 				color: var(--vscode-input-foreground);
 				border: 1px solid var(--vscode-input-border);
@@ -366,7 +375,7 @@ export class AIWebBrowserEditor extends EditorPane {
 
 			.chat-input {
 				width: 100%;
-				padding: 8px;
+				padding: 8px 0px;
 				background: var(--vscode-input-background);
 				color: var(--vscode-input-foreground);
 				border: 1px solid var(--vscode-input-border);
