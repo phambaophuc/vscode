@@ -1,78 +1,166 @@
-# Visual Studio Code - Open Source ("Code - OSS")
-[![Feature Requests](https://img.shields.io/github/issues/microsoft/vscode/feature-request.svg)](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
-[![Bugs](https://img.shields.io/github/issues/microsoft/vscode/bug.svg)](https://github.com/microsoft/vscode/issues?utf8=✓&q=is%3Aissue+is%3Aopen+label%3Abug)
-[![Gitter](https://img.shields.io/badge/chat-on%20gitter-yellow.svg)](https://gitter.im/Microsoft/vscode)
+# VSCode AI Web Explorer
 
-## The Repository
+A customized fork of Visual Studio Code featuring an integrated AI assistant and embedded web browser. The default editor area has been replaced by the **AI Web Explorer** app.
 
-This repository ("`Code - OSS`") is where we (Microsoft) develop the [Visual Studio Code](https://code.visualstudio.com) product together with the community. Not only do we work on code and issues here, we also publish our [roadmap](https://github.com/microsoft/vscode/wiki/Roadmap), [monthly iteration plans](https://github.com/microsoft/vscode/wiki/Iteration-Plans), and our [endgame plans](https://github.com/microsoft/vscode/wiki/Running-the-Endgame). This source code is available to everyone under the standard [MIT license](https://github.com/microsoft/vscode/blob/main/LICENSE.txt).
+---
 
-## Visual Studio Code
+## 🚀 Features
 
-<p align="center">
-  <img alt="VS Code in action" src="https://user-images.githubusercontent.com/35271042/118224532-3842c400-b438-11eb-923d-a5f66fa6785a.png">
-</p>
+* **Embedded Browser:** Load any website directly inside VSCode from an input box.
+* **AI Chatbox:** Ask questions about the website using Gemini LLM.
+* **Two-Panel Layout:**
 
-[Visual Studio Code](https://code.visualstudio.com) is a distribution of the `Code - OSS` repository with Microsoft-specific customizations released under a traditional [Microsoft product license](https://code.visualstudio.com/License/).
+  * Left (80%): Website viewer.
+  * Right (20%): AI chatbox.
+* Tested successfully with `https://wikipedia.org` (no proxy required).
 
-[Visual Studio Code](https://code.visualstudio.com) combines the simplicity of a code editor with what developers need for their core edit-build-debug cycle. It provides comprehensive code editing, navigation, and understanding support along with lightweight debugging, a rich extensibility model, and lightweight integration with existing tools.
+---
 
-Visual Studio Code is updated monthly with new features and bug fixes. You can download it for Windows, macOS, and Linux on [Visual Studio Code's website](https://code.visualstudio.com/Download). To get the latest releases every day, install the [Insiders build](https://code.visualstudio.com/insiders).
+## 🧩 Project Structure
 
-## Contributing
+```
+src/vs/workbench/contrib/aiWebBrowser/
+ ├── browser/
+ │   ├── aiWebBrowserEditor.ts        # Main React-based view (browser + chatbox)
+ │   ├── aiWebBrowserInput.ts         # Editor Input
+ │   ├── aiWebBrowser.contribution.ts # Entry point registration
+```
 
-There are many ways in which you can participate in this project, for example:
+---
 
-* [Submit bugs and feature requests](https://github.com/microsoft/vscode/issues), and help us verify as they are checked in
-* Review [source code changes](https://github.com/microsoft/vscode/pulls)
-* Review the [documentation](https://github.com/microsoft/vscode-docs) and make pull requests for anything from typos to additional and new content
+## ⚙️ Prerequisites (Windows)
 
-If you are interested in fixing issues and contributing directly to the code base,
-please see the document [How to Contribute](https://github.com/microsoft/vscode/wiki/How-to-Contribute), which covers the following:
+In order to clone the repository and install dependencies via npm, you need network access.
 
-* [How to build and run from source](https://github.com/microsoft/vscode/wiki/How-to-Contribute)
-* [The development workflow, including debugging and running tests](https://github.com/microsoft/vscode/wiki/How-to-Contribute#debugging)
-* [Coding guidelines](https://github.com/microsoft/vscode/wiki/Coding-Guidelines)
-* [Submitting pull requests](https://github.com/microsoft/vscode/wiki/How-to-Contribute#pull-requests)
-* [Finding an issue to work on](https://github.com/microsoft/vscode/wiki/How-to-Contribute#where-to-contribute)
-* [Contributing to translations](https://aka.ms/vscodeloc)
+> ⚠️ **Important:** Clone the repository into a path **without spaces** to avoid errors while compiling native modules.
 
-## Feedback
+### Required Tools
 
-* Ask a question on [Stack Overflow](https://stackoverflow.com/questions/tagged/vscode)
-* [Request a new feature](CONTRIBUTING.md)
-* Upvote [popular feature requests](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
-* [File an issue](https://github.com/microsoft/vscode/issues)
-* Connect with the extension author community on [GitHub Discussions](https://github.com/microsoft/vscode-discussions/discussions) or [Slack](https://aka.ms/vscode-dev-community)
-* Follow [@code](https://twitter.com/code) and let us know what you think!
+* **Git**
+* **Node.js** (x64 or ARM64) version **≥ 20.x** (check `.nvmrc` for the recommended version)
 
-See our [wiki](https://github.com/microsoft/vscode/wiki/Feedback-Channels) for a description of each of these channels and information on some other available community-driven channels.
+  * If using `nvm`, set the default version using:
 
-## Related Projects
+    ```bash
+    nvm alias default <VERSION>
+    ```
+  * **Windows (ARM64):** Add `arm64` postfix, e.g. `nvm install 22 arm64`.
+* **Python** (for `node-gyp`)
 
-Many of the core components and extensions to VS Code live in their own repositories on GitHub. For example, the [node debug adapter](https://github.com/microsoft/vscode-node-debug) and the [mono debug adapter](https://github.com/microsoft/vscode-mono-debug) repositories are separate from each other. For a complete list, please visit the [Related Projects](https://github.com/microsoft/vscode/wiki/Related-Projects) page on our [wiki](https://github.com/microsoft/vscode/wiki).
+  * Ensure Python runs correctly from the command prompt.
+  * Install setuptools if missing:
 
-## Bundled Extensions
+    ```bash
+    pip install setuptools
+    ```
+* **C/C++ Build Tools**
 
-VS Code includes a set of built-in extensions located in the [extensions](extensions) folder, including grammars and snippets for many languages. Extensions that provide rich language support (inline suggestions, Go to Definition) for a language have the suffix `language-features`. For example, the `json` extension provides coloring for `JSON` and the `json-language-features` extension provides rich language support for `JSON`.
+  * Install **Visual Studio Build Tools** or **Visual Studio Community Edition**.
+  * Minimum workload: **Desktop Development with C++**.
+  * Required components (for Spectre-mitigated builds):
 
-## Development Container
+    * `MSVC v143 - VS 2022 C++ x64/x86 Spectre-mitigated libs (Latest)`
+    * `C++ ATL for latest build tools with Spectre Mitigations`
+    * `C++ MFC for latest build tools with Spectre Mitigations`
+  * **Windows on ARM only:** install `Windows 10 (Or 11) SDK (10.0.20348.0)`.
+  * After installation, run:
 
-This repository includes a Visual Studio Code Dev Containers / GitHub Codespaces development container.
+    ```bash
+    npm config edit
+    ```
 
-* For [Dev Containers](https://aka.ms/vscode-remote/download/containers), use the **Dev Containers: Clone Repository in Container Volume...** command which creates a Docker volume for better disk I/O on macOS and Windows.
-  * If you already have VS Code and Docker installed, you can also click [here](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/microsoft/vscode) to get started. This will cause VS Code to automatically install the Dev Containers extension if needed, clone the source code into a container volume, and spin up a dev container for use.
+    and add:
 
-* For Codespaces, install the [GitHub Codespaces](https://marketplace.visualstudio.com/items?itemName=GitHub.codespaces) extension in VS Code, and use the **Codespaces: Create New Codespace** command.
+    ```
+    msvs_version=2022
+    ```
 
-Docker / the Codespace should have at least **4 Cores and 6 GB of RAM (8 GB recommended)** to run a full build. See the [development container README](.devcontainer/README.md) for more information.
+> ⚠️ Ensure your user profile path only contains ASCII characters (e.g., `C:\Users\John`). Non-ASCII paths can cause `node-gyp` issues.
 
-## Code of Conduct
+## ⚙️ Setup Instructions
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+### 1. Clone and install dependencies
 
-## License
+```bash
+git clone https://github.com/phambaophuc/vscode.git
+cd vscode
+git checkout feat/ai-web-browser
+npm install
+```
 
-Copyright (c) Microsoft Corporation. All rights reserved.
+### 2. Build and run
 
-Licensed under the [MIT](LICENSE.txt) license.
+For web build:
+
+```bash
+npm run watch
+./scripts/code-web.sh
+```
+
+For desktop build:
+
+```bash
+npm run watch
+./scripts/code.bat
+```
+
+---
+
+## 🧠 How It Works
+
+1. The **embedded browser** loads the given website URL entered by the user.
+2. The **chatbox** accepts user queries about the website’s content.
+3. On submit, it sends the prompt to the **Gemini API** and displays the AI’s answer above the chat input.
+4. The user can repeatedly ask questions, summarize, or extract details from the loaded webpage.
+
+---
+
+## 🔑 Configuration
+
+You do **not** need a `.env` file.
+The **Gemini API key** is entered directly via the input box in the chat UI.
+
+Example usage:
+
+1. Enter a website URL (e.g. `https://wikipedia.org`) and click **Load**.
+2. Enter your Gemini API key in the input field (You can get API key from https://aistudio.google.com/api-keys).
+3. Type a question (e.g. *"Summarize this page"*) and press Enter.
+4. The AI response will appear above the chat input box.
+
+---
+
+## 🖥️ Launching the AI Web Browser
+
+After starting VSCode from your build, open the **Command Palette** using:
+
+```
+Ctrl + Shift + P
+```
+
+Then search for and select:
+
+```
+AI Web Browser: Open
+```
+
+This will open the custom AI Web Browser view inside the main editor area.
+
+| Command Palette Search                                    | Result                                               |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| ![Command Palette Search](https://github.com/user-attachments/assets/ba4dd8dd-af74-442d-b66e-462a732477fb) | ![AI Web Browser Open](https://github.com/user-attachments/assets/cc456cec-3e0e-4253-bf3b-2b1f0cf75c0b) |
+
+---
+
+## 🖼️ Screenshots
+
+| Embedded Browser                               | AI Chatbox                                  |
+| ---------------------------------------------- | ------------------------------------------- |
+| ![Browser Screenshot](https://github.com/user-attachments/assets/b3f5c10b-3909-45c5-b287-2dc11ad8f80d) | ![Chatbox Screenshot](https://github.com/user-attachments/assets/3b511dd5-c847-4498-96a7-27f963b7cd32) |
+
+**Full Interface:**
+
+![Full UI](https://github.com/user-attachments/assets/e215b601-7e8e-4837-a0e3-aad14b92b50e)
+
+## 🧑‍💻 Author
+
+Developed by **Pham Bao Phuc**
